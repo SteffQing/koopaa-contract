@@ -12,7 +12,7 @@ koopa_contract = "Ao3XasHpFWzZbu5Xza3wUk7JVV3itNxcGv7XmuiT7ZXQ"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

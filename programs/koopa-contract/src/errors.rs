@@ -2,6 +2,13 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum KooPaaError {
+
+    #[msg("You have already claimed your payout")]
+    AlreadyClaimed,
+
+    #[msg("Not all participants have contributed yet")]
+    NotAllContributed,
+
     #[msg("Contribution amount must be greater than zero")]
     InvalidContributionAmount,
     
@@ -25,9 +32,15 @@ pub enum KooPaaError {
     
     #[msg("Only the creator can start the group")]
     OnlyCreatorCanStart,
+
+    #[msg("Only admin can update global state")]
+    OnlyAdminCanUpdate,
     
     #[msg("Not enough participants have joined to start the group")]
     NotEnoughParticipants,
+
+    #[msg("You are not a participant in this group")]
+    NotParticipant,
     
     #[msg("Group has not started yet")]
     GroupNotStarted,
@@ -37,10 +50,22 @@ pub enum KooPaaError {
     
     #[msg("You are not a participant in this group")]
     NotAParticipant,
+
+     #[msg("You cannot contribute to this round")]
+    CannotContributeToThisRound,
     
     #[msg("Interval has not passed yet")]
     IntervalNotPassed,
     
     #[msg("Insufficient funds in token account")]
     InsufficientFunds,
+
+    #[msg("Fee percentage must be between 0 and 100")]
+    InvalidFeePercentage,
+
+    #[msg("You have already contributed to this round")]
+    AlreadyContributed,
+
+    #[msg("You are not the recipient for this round")]
+    NotCurrentRecipient,
 }
