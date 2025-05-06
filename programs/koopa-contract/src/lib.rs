@@ -183,8 +183,8 @@ mod koopa {
             .ok_or(KooPaaError::NotCurrentRecipient)?;
 
         let recipient_pubkey = group.participants[recipient_index].pubkey;
-    
-         // If contributor is the current recipient, they don't need to contribute
+
+        // If contributor is the current recipient, they don't need to contribute
         if contributor.key() == recipient_pubkey {
             return Ok(());
         }
@@ -194,7 +194,6 @@ mod koopa {
             .rounds_contributed
             .contains(&group.current_round);
         require!(!already_contributed, KooPaaError::AlreadyContributed);
-
 
         // Calculate fee (if any)
         let fee_amount = calculate_fee(group.contribution_amount, global_state.fee_percentage);
@@ -428,6 +427,8 @@ pub struct Contribute<'info> {
     #[account(
         mut,
         constraint = recipient_token_account.mint == token_mint.key(),
+        constraint = recipient_token_account.owner == ajo_group.participants[ajo_group.current_receiver_index as usize].pubkey,
+
     )]
     pub recipient_token_account: Account<'info, TokenAccount>,
 
