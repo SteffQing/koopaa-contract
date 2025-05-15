@@ -96,7 +96,15 @@ mod koopa {
         group.start_timestamp = None;
         group.close_votes = vec![];
         group.is_closed = false;
-        group.bumps = ctx.bumps.ajo_group;
+
+        
+        let (_group_pda, group_bump) =
+            Pubkey::find_program_address(&[b"ajo-group", group.name.as_bytes()], ctx.program_id);
+        let (_vault_pda, vault_bump) =
+            Pubkey::find_program_address(&[b"group-vault", group.key().as_ref()], ctx.program_id);
+
+        group.bumps = group_bump;
+        group.vault_bump = vault_bump;
 
         global_state.total_groups += 1;
 
@@ -271,10 +279,11 @@ mod koopa {
         );
 
         let group_name = group.name.clone();
+        let group_key = group.key();
         let signer_seeds = &[
             b"group-vault",
-            group_name.as_bytes(),
-            &[ctx.bumps.group_signer],
+            group_key.as_ref(),
+            &[group.vault_bump],
         ];
 
         let payout_amount = group.contribution_amount * (num_participants as u64);
@@ -384,10 +393,11 @@ mod koopa {
             authority: ctx.accounts.group_signer.to_account_info(),
         };
 
+        let group_key = group.key();
         let signer_seeds = &[
             b"group-vault",
-            group.name.as_bytes(),
-            &[ctx.bumps.group_signer],
+            group_key.as_ref(),
+            &[group.vault_bump],
         ];
 
         transfer(
@@ -470,7 +480,7 @@ pub struct CreateAjoGroup<'info> {
     #[account(
         init,
         payer = creator,
-        seeds = [b"group-vault", name.as_bytes()],
+        seeds = [b"group-vault", ajo_group.key().as_ref()],
         bump,
         token::mint = token_mint,
         token::authority = ajo_group
@@ -484,7 +494,11 @@ pub struct CreateAjoGroup<'info> {
 
 #[derive(Accounts)]
 pub struct JoinAjoGroup<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"ajo-group", ajo_group.name.as_bytes()],
+        bump = ajo_group.bumps
+    )]
     pub ajo_group: Account<'info, AjoGroup>,
 
     pub participant: Signer<'info>,
@@ -508,7 +522,7 @@ pub struct JoinAjoGroup<'info> {
     #[account(
         mut,
         seeds = [b"group-vault", ajo_group.key().as_ref()],
-        bump
+        bump = ajo_group.vault_bump,
     )]
     pub group_token_vault: Account<'info, TokenAccount>,
 
@@ -518,7 +532,11 @@ pub struct JoinAjoGroup<'info> {
 
 #[derive(Accounts)]
 pub struct Contribute<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"ajo-group", ajo_group.name.as_bytes()],
+        bump = ajo_group.bumps
+    )]
     pub ajo_group: Account<'info, AjoGroup>,
 
     pub contributor: Signer<'info>,
@@ -533,7 +551,7 @@ pub struct Contribute<'info> {
     #[account(
         mut,
         seeds = [b"group-vault", ajo_group.key().as_ref()],
-        bump
+        bump = ajo_group.vault_bump,
     )]
     pub group_token_vault: Account<'info, TokenAccount>,
 
@@ -545,20 +563,24 @@ pub struct Contribute<'info> {
 
 #[derive(Accounts)]
 pub struct Payout<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"ajo-group", ajo_group.name.as_bytes()],
+        bump = ajo_group.bumps
+    )]
     pub ajo_group: Account<'info, AjoGroup>,
 
     #[account(
-        seeds = [b"group-vault", ajo_group.name.as_bytes()],
-        bump,
+        seeds = [b"group-vault", ajo_group.key().as_ref()],
+        bump = ajo_group.vault_bump,
     )]
     /// CHECK: This is the PDA that signs for the vault
     pub group_signer: UncheckedAccount<'info>,
 
     #[account(
         mut,
-        seeds = [b"group-vault", ajo_group.name.as_bytes()],
-        bump,
+        seeds = [b"group-vault", ajo_group.key().as_ref()],
+        bump = ajo_group.vault_bump,
     )]
     pub group_token_vault: Account<'info, TokenAccount>,
 
@@ -574,7 +596,11 @@ pub struct Payout<'info> {
 
 #[derive(Accounts)]
 pub struct CloseAjoGroup<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"ajo-group", ajo_group.name.as_bytes()],
+        bump = ajo_group.bumps
+    )]
     pub ajo_group: Account<'info, AjoGroup>,
 
     pub participant: Signer<'info>,
@@ -591,20 +617,24 @@ pub struct CloseAjoGroup<'info> {
 
 #[derive(Accounts)]
 pub struct ClaimRefund<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"ajo-group", ajo_group.name.as_bytes()],
+        bump = ajo_group.bumps
+    )]
     pub ajo_group: Account<'info, AjoGroup>,
 
     #[account(
-        seeds = [b"group-vault", ajo_group.name.as_bytes()],
-        bump,
+        seeds = [b"group-vault", ajo_group.key().as_ref()],
+        bump = ajo_group.vault_bump,
     )]
     /// CHECK: PDA authority for vault
     pub group_signer: UncheckedAccount<'info>,
 
     #[account(
         mut,
-        seeds = [b"group-vault", ajo_group.name.as_bytes()],
-        bump,
+        seeds = [b"group-vault", ajo_group.key().as_ref()],
+        bump = ajo_group.vault_bump,
     )]
     pub group_token_vault: Account<'info, TokenAccount>,
 

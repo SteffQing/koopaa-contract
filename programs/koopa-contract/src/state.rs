@@ -25,6 +25,7 @@ pub struct AjoGroup {
     pub close_votes: Vec<Pubkey>, // Track who has voted to close
     pub is_closed: bool,
 
+    pub vault_bump: u8,
     pub bumps: u8, // PDA bump
 }
 
@@ -44,6 +45,7 @@ impl AjoGroup {
                          2 +  // payout_round (u16)
                          4 + (num_participants as usize * 32) + // close_votes vector + max pubkeys
                          1 +  // is_closed (bool)
+                         1 + // vault_bump (u8)
                          1; // bumps (u8)
 
         // Space for participants (with all their data)
