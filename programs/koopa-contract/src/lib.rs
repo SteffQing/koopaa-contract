@@ -53,7 +53,10 @@ mod koopa {
             payout_interval >= 7 && payout_interval <= 90,
             KooPaaError::InvalidInterval
         );
-        require!(payout_interval >= contribution_interval, KooPaaError::InvalidInterval);
+        require!(
+            payout_interval >= contribution_interval,
+            KooPaaError::InvalidInterval
+        );
         require!(
             num_participants >= 3 && num_participants <= 20,
             KooPaaError::InvalidParticipantCount
@@ -80,11 +83,14 @@ mod koopa {
         let global_state = &mut ctx.accounts.global_state;
         let clock = Clock::get()?;
 
+        let interval = payout_interval as f64 / contribution_interval as f64;
+        let round_payout_interval = interval.ceil() as u8 * contribution_interval;
+
         group.name = name.clone();
         group.contribution_amount = contribution_amount;
         group.contribution_interval = contribution_interval;
         group.security_deposit = security_deposit;
-        group.payout_interval = payout_interval;
+        group.payout_interval = round_payout_interval;
         group.num_participants = num_participants;
 
         group.participants = vec![AjoParticipant {
@@ -97,7 +103,6 @@ mod koopa {
         group.close_votes = vec![];
         group.is_closed = false;
 
-        
         let (_group_pda, group_bump) =
             Pubkey::find_program_address(&[b"ajo-group", group.name.as_bytes()], ctx.program_id);
         let (_vault_pda, vault_bump) =
@@ -114,7 +119,7 @@ mod koopa {
             contribution_amount,
             num_participants,
             contribution_interval,
-            payout_interval,
+            payout_interval: round_payout_interval,
         });
 
         emit!(ParticipantJoinedEvent {
@@ -165,9 +170,15 @@ mod koopa {
             refund_amount: 0,
         });
 
+        let group_name = group.name.clone();
+
         if group.participants.len() == group.num_participants as usize {
             group.start_timestamp = Some(clock.unix_timestamp);
             global_state.active_groups += 1;
+            emit!(AjoGroupStartedEvent {
+                group_name,
+                start_timestamp: clock.unix_timestamp
+            });
         }
 
         emit!(ParticipantJoinedEvent {
@@ -250,9 +261,9 @@ mod koopa {
         let start_timestamp = group.start_timestamp.ok_or(KooPaaError::GroupNotStarted)?;
         let time_since_start = clock.unix_timestamp - start_timestamp;
 
-        let contributions_per_payout = group.payout_interval as f64 / group.contribution_interval as f64;
-        let contributions_per_payout_ceil = contributions_per_payout.ceil() as u16;
-        let min_required_contribution_rounds = (group.payout_round + 1) * contributions_per_payout_ceil;
+        let required_contributions_per_payout = group.payout_interval / group.contribution_interval;
+        let min_required_contribution_rounds =
+            (group.payout_round + 1) * required_contributions_per_payout as u16;
 
         for p in &group.participants {
             require!(
@@ -280,13 +291,11 @@ mod koopa {
 
         let group_name = group.name.clone();
         let group_key = group.key();
-        let signer_seeds = &[
-            b"group-vault",
-            group_key.as_ref(),
-            &[group.vault_bump],
-        ];
+        let signer_seeds = &[b"group-vault", group_key.as_ref(), &[group.vault_bump]];
 
-        let payout_amount = group.contribution_amount * (num_participants as u64);
+        let payout_amount = group.contribution_amount
+            * (num_participants as u64)
+            * (required_contributions_per_payout as u64);
         let transfer_accounts = Transfer {
             from: ctx.accounts.group_token_vault.to_account_info(),
             to: ctx.accounts.recipient.to_account_info(),
@@ -337,20 +346,23 @@ mod koopa {
 
         let total_participants = group.participants.len();
         let total_votes = group.close_votes.len();
-        
+
         let group_started = group.start_timestamp.is_some();
         let group_contribution_amount = group.contribution_amount;
         let group_security_deposit = group.security_deposit;
 
         if total_votes * 2 > total_participants {
-            let minimum_common_contribution_round = group.participants.iter()
+            let minimum_common_contribution_round = group
+                .participants
+                .iter()
                 .map(|p| p.contribution_round)
                 .min()
                 .unwrap();
 
             for participant in group.participants.iter_mut() {
                 let contribution_refund = if group_started {
-                    let refundable_rounds = participant.contribution_round - minimum_common_contribution_round;
+                    let refundable_rounds =
+                        participant.contribution_round - minimum_common_contribution_round;
                     group_contribution_amount * refundable_rounds as u64
                 } else {
                     0
@@ -358,7 +370,7 @@ mod koopa {
 
                 participant.refund_amount = group_security_deposit + contribution_refund;
             }
-                
+
             if group_started && global_state.active_groups > 0 {
                 global_state.active_groups -= 1;
             }
@@ -380,7 +392,9 @@ mod koopa {
 
         require!(group.is_closed, KooPaaError::GroupNotClosed);
 
-        let participant_index  = group.participants.iter()
+        let participant_index = group
+            .participants
+            .iter()
             .position(|p| p.pubkey == participant_key)
             .ok_or(KooPaaError::NotParticipant)?;
 
@@ -394,11 +408,7 @@ mod koopa {
         };
 
         let group_key = group.key();
-        let signer_seeds = &[
-            b"group-vault",
-            group_key.as_ref(),
-            &[group.vault_bump],
-        ];
+        let signer_seeds = &[b"group-vault", group_key.as_ref(), &[group.vault_bump]];
 
         transfer(
             CpiContext::new_with_signer(
