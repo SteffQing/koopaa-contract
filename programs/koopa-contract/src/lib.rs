@@ -291,8 +291,7 @@ mod koopa {
         );
 
         let group_name = group.name.clone();
-        let group_key = group.key();
-        let signer_seeds = &[b"group-vault", group_key.as_ref(), &[group.vault_bump]];
+        let signer_seeds = &[b"ajo-group", group_name.as_bytes(), &[group.bumps]];
 
         let payout_amount = group.contribution_amount
             * (num_participants as u64)
@@ -409,8 +408,8 @@ mod koopa {
             authority: authority_info,
         };
 
-        let group_key = group.key();
-        let signer_seeds = &[b"group-vault", group_key.as_ref(), &[group.vault_bump]];
+        let group_name = group.name.clone();
+        let signer_seeds = &[b"ajo-group", group_name.as_bytes(), &[group.bumps]];
 
         transfer(
             CpiContext::new_with_signer(
