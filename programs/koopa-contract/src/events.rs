@@ -18,6 +18,12 @@ pub struct ParticipantJoinedEvent {
 }
 
 #[event]
+pub struct AjoGroupStartedEvent {
+    pub group_name: String,
+    pub start_timestamp: i64,
+}
+
+#[event]
 pub struct ContributionMadeEvent {
     pub group_name: String,
     pub contributor: Pubkey,
