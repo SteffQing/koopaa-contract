@@ -250,6 +250,7 @@ mod koopa {
     }
 
     pub fn payout(ctx: Context<Payout>) -> Result<()> {
+        let authority_info = ctx.accounts.ajo_group.to_account_info();
         let group = &mut ctx.accounts.ajo_group;
         let clock = Clock::get()?;
 
@@ -299,7 +300,7 @@ mod koopa {
         let transfer_accounts = Transfer {
             from: ctx.accounts.group_token_vault.to_account_info(),
             to: ctx.accounts.recipient.to_account_info(),
-            authority: ctx.accounts.group_signer.to_account_info(),
+            authority: authority_info,
         };
 
         transfer(
@@ -387,6 +388,7 @@ mod koopa {
     }
 
     pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
+        let authority_info = ctx.accounts.ajo_group.to_account_info();
         let group = &mut ctx.accounts.ajo_group;
         let participant_key = ctx.accounts.participant.key();
 
@@ -404,7 +406,7 @@ mod koopa {
         let transfer_accounts = Transfer {
             from: ctx.accounts.group_token_vault.to_account_info(),
             to: ctx.accounts.participant_token_account.to_account_info(),
-            authority: ctx.accounts.group_signer.to_account_info(),
+            authority: authority_info,
         };
 
         let group_key = group.key();
@@ -581,13 +583,6 @@ pub struct Payout<'info> {
     pub ajo_group: Account<'info, AjoGroup>,
 
     #[account(
-        seeds = [b"group-vault", ajo_group.key().as_ref()],
-        bump = ajo_group.vault_bump,
-    )]
-    /// CHECK: This is the PDA that signs for the vault
-    pub group_signer: UncheckedAccount<'info>,
-
-    #[account(
         mut,
         seeds = [b"group-vault", ajo_group.key().as_ref()],
         bump = ajo_group.vault_bump,
@@ -633,13 +628,6 @@ pub struct ClaimRefund<'info> {
         bump = ajo_group.bumps
     )]
     pub ajo_group: Account<'info, AjoGroup>,
-
-    #[account(
-        seeds = [b"group-vault", ajo_group.key().as_ref()],
-        bump = ajo_group.vault_bump,
-    )]
-    /// CHECK: PDA authority for vault
-    pub group_signer: UncheckedAccount<'info>,
 
     #[account(
         mut,

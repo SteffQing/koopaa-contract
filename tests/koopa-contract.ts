@@ -92,9 +92,9 @@ describe("koopaa", () => {
   it("initializes the global state", async () => {
     await program.methods
       .initialize()
-      .accounts({
+      .accountsStrict({
         globalState: globalStatePda,
-        authority: creator.publicKey,
+        admin: creator.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
       .rpc();
@@ -113,7 +113,7 @@ describe("koopaa", () => {
         7, // payout_interval
         3 // num_participants
       )
-      .accounts({
+      .accountsStrict({
         globalState: globalStatePda,
         ajoGroup: groupPda,
         creator: creator.publicKey,
@@ -133,7 +133,7 @@ describe("koopaa", () => {
   it("joins ajo group", async () => {
     await program.methods
       .joinAjoGroup()
-      .accounts({
+      .accountsStrict({
         globalState: globalStatePda,
         ajoGroup: groupPda,
         participant: participant.publicKey,
@@ -153,7 +153,7 @@ describe("koopaa", () => {
     try {
       await program.methods
         .contribute()
-        .accounts({
+        .accountsStrict({
           ajoGroup: groupPda,
           contributor: participant.publicKey,
           contributorTokenAccount: participantTokenAccount,
@@ -191,7 +191,7 @@ describe("koopaa", () => {
 
     await program.methods
       .joinAjoGroup()
-      .accounts({
+      .accountsStrict({
         globalState: globalStatePda,
         ajoGroup: groupPda,
         participant: thirdParticipant.publicKey,
@@ -216,7 +216,7 @@ describe("koopaa", () => {
     ) => {
       await program.methods
         .contribute()
-        .accounts({
+        .accountsStrict({
           ajoGroup: groupPda,
           contributor: signer.publicKey,
           contributorTokenAccount: tokenAccount,
@@ -253,7 +253,7 @@ describe("koopaa", () => {
 
     await program.methods
       .payout()
-      .accounts({
+      .accountsStrict({
         ajoGroup: groupPda,
         groupTokenVault: groupVaultPda,
         recipientTokenAccount: creatorTokenAccount,
@@ -279,7 +279,7 @@ describe("koopaa", () => {
   it("participant votes to close the group", async () => {
     await program.methods
       .closeAjoGroup()
-      .accounts({
+      .accountsStrict({
         ajoGroup: groupPda,
         participant: participant.publicKey,
       })
@@ -294,7 +294,7 @@ describe("koopaa", () => {
     // Manually set group to closed for test shortcut
     await program.methods
       .closeAjoGroup()
-      .accounts({
+      .accountsStrict({
         ajoGroup: groupPda,
         participant: creator.publicKey,
       })
@@ -302,7 +302,7 @@ describe("koopaa", () => {
 
     await program.methods
       .closeAjoGroup()
-      .accounts({
+      .accountsStrict({
         ajoGroup: groupPda,
         participant: thirdParticipant.publicKey,
       })
@@ -320,7 +320,7 @@ describe("koopaa", () => {
 
     await program.methods
       .claimRefund()
-      .accounts({
+      .accountsStrict({
         ajoGroup: groupPda,
         participant: participant.publicKey,
         participantTokenAccount: participantTokenAccount,
