@@ -1,78 +1,169 @@
-# KooPaa 💸 — Rotational Savings on Solana
+# 🐢 KooPaa Smart Contract
 
-**KooPaa** is a smart contract for running *Ajo*-style rotational savings groups on the **Solana blockchain**.
+KooPaa is a decentralized rotating savings and credit association (ROSCA) protocol built on the Solana blockchain using the Anchor framework. It enables users to create and participate in Ajo-style savings groups, make periodic contributions, and receive scheduled payouts in a transparent and trustless manner.
 
-Inspired by West African cooperative savings models, KooPaa enables decentralized savings groups where members contribute fixed amounts periodically, and take turns receiving payouts.
+---
 
-## ⚙️ What It Does
+## 🧱 Architecture Overview
 
-KooPaa lets users:
+KooPaa uses [Anchor](https://book.anchor-lang.com/) and [SPL Token](https://spl.solana.com/token) libraries to manage program logic, account constraints, and token transfers.
 
-* 📦 **Create a savings group** with a name, contribution amount, intervals, and security deposit.
-* 👥 **Join an existing group** (limited to a fixed number of participants).
-* 💰 **Make periodic contributions** in USDC.
-* 🪙 **Receive payouts** in turns based on group configuration.
-* 🔒 **Secure deposits** ensure commitment, refundable at group closure.
-* 🧾 **Track contributions, payouts, and group state** onchain.
+### Key Features:
 
-## 🧠 Key Concepts
+* ✅ **Create savings groups (Ajo)**
+* ✅ **Join with a security deposit**
+* ✅ **Contribute periodically in fixed intervals**
+* ✅ **Scheduled payouts to rotating participants**
+* ✅ **Refunds and group closure with voting support**
+* ✅ **Fully on-chain and event-emitting for dApp interop**
 
-* **Security Deposit**: Participants deposit a fixed amount when joining to discourage dropouts.
-* **Contribution Interval**: Time between required contributions (e.g. every 7 days).
-* **Payout Interval**: Time between payouts to members.
-* **Rounds**: Each cycle where every member contributes to and one member is paid.
-* **Payout Order**: First to join, first to receive payout.
+---
 
-## 📦 Events
+## 🛠️ Tech Stack
 
-The contract emits several events for off-chain indexers and bots:
+* **Solana** + **Anchor**
+* **TypeScript** test suite with:
 
-| Event                    | Description                                        |
-| ------------------------ | -------------------------------------------------- |
-| `AjoGroupCreatedEvent`   | Emitted when a new group is created                |
-| `ParticipantJoinedEvent` | Emitted when a user joins a group                  |
-| `ContributionMadeEvent`  | Emitted on each user contribution                  |
-| `PayoutMadeEvent`        | Emitted when a payout is distributed               |
-| `AjoGroupClosedEvent`    | Emitted when a group is closed                     |
-| `RefundClaimedEvent`     | Emitted when a participant withdraws their deposit |
+  * `@coral-xyz/anchor`
+  * `@solana/spl-token`
+  * `chai`
 
-These events can be used to **monitor off-chain**, **notify users**, or **trigger payouts** when all contributions in a round are completed.
+---
 
-## 🛠️ Stack
+## 📁 File Structure
 
-* **Solana**: Onchain program
-* **Anchor**: Framework for writing and testing Solana smart contracts
-* **TypeScript SDK**: Used in the backend for parsing events and triggering logic
-* **Redis (Upstash)**: Lightweight off-chain store to track progress & coordinate payouts
-* **Email/Telegram**: Optional notification layer for user updates
+```
+/programs/koopa/
+  ├── lib.rs                // Main program logic
+  ├── state/                // Account state definitions
+  ├── events.rs             // On-chain event definitions
+  ├── errors.rs             // Custom error types
+  ├── utils.rs              // Utility functions
+```
 
-## 🤖 Automation
+---
 
-KooPaa works best with an off-chain backend that:
+## 🧾 Instruction Overview
 
-* Tracks all emitted events
-* Stores contribution state in Redis
-* Sends notifications (email, Telegram, etc.)
-* Automatically triggers payouts once a round is complete
+### `initialize`
 
-> Even though the truth lives onchain, coordination (e.g. triggering payout *right when it’s ready*) is managed offchain.
+Initializes the global state account with default values.
 
-## 🧪 Testing
+---
 
-Use [Anchor's test suite](https://book.anchor-lang.com/chapter_5/testing.html) to simulate:
+### `create_ajo_group`
+
+Creates a new Ajo group with:
+
+* Name
+* Security deposit
+* Contribution amount & interval
+* Payout interval
+* Participant count
+
+Emits:
+
+* `AjoGroupCreatedEvent`
+* `ParticipantJoinedEvent` (for creator)
+
+---
+
+### `join_ajo_group`
+
+Lets a new participant join an existing group before it starts. Transfers their security deposit to the group vault.
+
+Emits:
+
+* `ParticipantJoinedEvent`
+* `AjoGroupStartedEvent` (once group is full)
+
+---
+
+### `contribute`
+
+A participant contributes tokens based on how many rounds they've missed. Requires the group to be active and the contributor to be a member.
+
+Emits:
+
+* `ContributionMadeEvent`
+
+---
+
+### `payout`
+
+Transfers pooled contributions to the current round's recipient if all participants have paid and it's time.
+
+Emits:
+
+* `PayoutMadeEvent`
+
+---
+
+### `close_ajo_group`
+
+Allows participants to vote for closure. Once threshold is met, group status is marked closed and participants can withdraw refunds.
+
+Emits:
+
+* `AjoGroupClosedEvent`
+
+---
+
+### `claim_refund`
+
+After group closure, participants can claim their unused security deposit.
+
+Emits:
+
+* `RefundClaimedEvent`
+
+---
+
+## 🔐 Accounts
+
+* `GlobalState`: Program-wide metadata
+* `AjoGroup`: A specific ROSCA group
+* `TokenVault`: PDA-controlled account holding pooled tokens
+* `AjoParticipant`: Embedded within each group state
+
+---
+
+## 🧪 Example Test Setup
+
+```ts
+import * as anchor from "@coral-xyz/anchor";
+import { Program } from "@coral-xyz/anchor";
+import { Koopa } from "../target/types/koopa";
+import {
+  TOKEN_PROGRAM_ID,
+  createMint,
+  createAccount,
+  mintTo,
+  getAccount,
+} from "@solana/spl-token";
+import { expect } from "chai";
+```
+
+You can write test cases for:
 
 * Group creation
-* Participant joins
-* Contribution flows
-* Timed payouts
-* Group closure & refunds
+* Joining participants
+* Contribution flow
+* Valid payouts
+* Group closure and refunds
 
-## 🚧 Limitations
+---
 
-* Time-based triggers (intervals) need to be **off-chain coordinated**
-* There's no `GroupStarted` event — rounds are inferred from contributions
-* Does not currently support mid-cycle joins or early exits
+## 📦 Build & Deploy
 
-## 📄 License
+```bash
+anchor build
+anchor deploy
+```
 
-MIT
+---
+
+## 📜 License
+
+MIT License.
+Created by the KooPaa Team.
