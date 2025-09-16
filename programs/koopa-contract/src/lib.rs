@@ -35,7 +35,6 @@ mod koopa {
     pub fn create_ajo_group(
         ctx: Context<CreateAjoGroup>,
         name: String,
-        security_deposit: u64,
         contribution_amount: u64,
         contribution_interval: u8,
         payout_interval: u8,
@@ -62,21 +61,6 @@ mod koopa {
             KooPaaError::InvalidParticipantCount
         );
         require!(name.len() <= 50, KooPaaError::NameTooLong);
-        require!(security_deposit > 0, KooPaaError::InvalidSecurityDeposit);
-
-        let transfer_accounts = Transfer {
-            from: ctx.accounts.creator_token_account.to_account_info(),
-            to: ctx.accounts.group_token_vault.to_account_info(),
-            authority: ctx.accounts.creator.to_account_info(),
-        };
-
-        transfer(
-            CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
-                transfer_accounts,
-            ),
-            security_deposit,
-        )?;
 
         let group = &mut ctx.accounts.ajo_group;
         let creator = &ctx.accounts.creator;
@@ -89,7 +73,6 @@ mod koopa {
         group.name = name.clone();
         group.contribution_amount = contribution_amount;
         group.contribution_interval = contribution_interval;
-        group.security_deposit = security_deposit;
         group.payout_interval = round_payout_interval;
         group.num_participants = num_participants;
 
@@ -101,6 +84,7 @@ mod koopa {
         group.payout_round = 0;
         group.start_timestamp = None;
         group.close_votes = vec![];
+        group.waiting_room = vec![];
         group.is_closed = false;
 
         let (_group_pda, group_bump) =
@@ -115,7 +99,6 @@ mod koopa {
 
         emit!(AjoGroupCreatedEvent {
             group_name: name.clone(),
-            security_deposit,
             contribution_amount,
             num_participants,
             contribution_interval,
@@ -126,16 +109,15 @@ mod koopa {
             group_name: name.clone(),
             participant: creator.key(),
             join_timestamp: clock.unix_timestamp,
+            admin_invited: false,
         });
 
         Ok(())
     }
 
-    pub fn join_ajo_group(ctx: Context<JoinAjoGroup>) -> Result<()> {
+    pub fn request_join_ajo_group(ctx: Context<RequestJoinAjoGroup>) -> Result<()> {
         let group = &mut ctx.accounts.ajo_group;
-        let global_state = &mut ctx.accounts.global_state;
         let participant = &ctx.accounts.participant;
-        let clock = Clock::get()?;
 
         require!(
             group.start_timestamp.is_none(),
@@ -149,44 +131,84 @@ mod koopa {
 
         require!(!already_joined, KooPaaError::AlreadyJoined);
 
-        let security_deposit = group.security_deposit;
-        let transfer_accounts = Transfer {
-            from: ctx.accounts.participant_token_account.to_account_info(),
-            to: ctx.accounts.group_token_vault.to_account_info(),
-            authority: participant.to_account_info(),
-        };
+        let already_requested = group.waiting_room.contains(&participant.key());
+        require!(!already_requested, KooPaaError::AlreadyRequested);
 
-        transfer(
-            CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
-                transfer_accounts,
-            ),
-            security_deposit,
-        )?;
-
-        group.participants.push(AjoParticipant {
-            pubkey: participant.key(),
-            contribution_round: 0,
-            refund_amount: 0,
+        group.waiting_room.push(participant.key());
+        
+        let group_name = group.name.clone();
+        emit!(ParticipantInWaitingRoomEvent {
+            group_name,
+            participant: participant.key(),
         });
 
-        let group_name = group.name.clone();
+        Ok(())
+    }
 
-        if group.participants.len() == group.num_participants as usize {
-            group.start_timestamp = Some(clock.unix_timestamp);
-            global_state.active_groups += 1;
-            emit!(AjoGroupStartedEvent {
-                group_name,
-                start_timestamp: clock.unix_timestamp
-            });
+    pub fn approve_join_request(ctx: Context<ApproveJoinRequest>,
+        approve: bool,) -> Result<()> {
+        let group = &mut ctx.accounts.ajo_group;
+        let global_state = &mut ctx.accounts.global_state;
+        let participant = &ctx.accounts.participant;
+        let possible_admin = &ctx.accounts.caller;
+        let clock = Clock::get()?;
+        let mut admin_invited = false;
+        let group_name = group.name.clone();
+        
+        require!(
+            group.start_timestamp.is_none(),
+            KooPaaError::GroupAlreadyStarted
+        );
+        require!(
+            !group.participants.is_empty(),
+            KooPaaError::GroupHasNoAdmin
+        );
+
+        let admin = group.participants[0].pubkey;
+        require!(admin == possible_admin.key(), KooPaaError::OnlyAdminCanUpdate);
+        
+        let already_joined = group
+            .participants
+            .iter()
+            .any(|p| p.pubkey == participant.key());
+        require!(!already_joined, KooPaaError::AlreadyJoined);
+
+        if let Some(pos) = group.waiting_room.iter().position(|p| *p == participant.key()) {
+            group.waiting_room.remove(pos);
+        } else {
+            // not in waiting room → mark as admin invited
+            admin_invited = true;
         }
 
-        emit!(ParticipantJoinedEvent {
-            group_name: group.name.clone(),
-            participant: participant.key(),
-            join_timestamp: clock.unix_timestamp,
-        });
-
+        if approve {
+            group.participants.push(AjoParticipant {
+                pubkey: participant.key(),
+                contribution_round: 0,
+                refund_amount: 0,
+            });
+            
+            if group.participants.len() == group.num_participants as usize {
+                group.start_timestamp = Some(clock.unix_timestamp);
+                global_state.active_groups += 1;
+                emit!(AjoGroupStartedEvent {
+                    group_name: group_name.clone(),
+                    start_timestamp: clock.unix_timestamp
+                });
+            }
+    
+            emit!(ParticipantJoinedEvent {
+                group_name,
+                participant: participant.key(),
+                join_timestamp: clock.unix_timestamp,
+                admin_invited,
+            });
+        } else {
+            emit!(JoinRequestRejectedEvent {
+                group_name,
+                participant: participant.key(),
+            });            
+        }
+        
         Ok(())
     }
 
@@ -482,13 +504,6 @@ pub struct CreateAjoGroup<'info> {
     pub token_mint: Account<'info, Mint>,
 
     #[account(
-        mut,
-        constraint = creator_token_account.owner == creator.key(),
-        constraint = creator_token_account.mint == token_mint.key()
-    )]
-    pub creator_token_account: Account<'info, TokenAccount>,
-
-    #[account(
         init,
         payer = creator,
         seeds = [b"group-vault", ajo_group.key().as_ref()],
@@ -504,7 +519,7 @@ pub struct CreateAjoGroup<'info> {
 }
 
 #[derive(Accounts)]
-pub struct JoinAjoGroup<'info> {
+pub struct RequestJoinAjoGroup<'info> {
     #[account(
         mut,
         seeds = [b"ajo-group", ajo_group.name.as_bytes()],
@@ -513,29 +528,6 @@ pub struct JoinAjoGroup<'info> {
     pub ajo_group: Account<'info, AjoGroup>,
 
     pub participant: Signer<'info>,
-
-    #[account(
-        mut,
-        seeds = [b"global-state"],
-        bump = global_state.bumps
-    )]
-    pub global_state: Account<'info, GlobalState>,
-
-    pub token_mint: Account<'info, Mint>,
-
-    #[account(
-        mut,
-        constraint = participant_token_account.owner == participant.key(),
-        constraint = participant_token_account.mint == token_mint.key()
-    )]
-    pub participant_token_account: Account<'info, TokenAccount>,
-
-    #[account(
-        mut,
-        seeds = [b"group-vault", ajo_group.key().as_ref()],
-        bump = ajo_group.vault_bump,
-    )]
-    pub group_token_vault: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
@@ -596,6 +588,28 @@ pub struct Payout<'info> {
 
     pub token_mint: Account<'info, Mint>,
     pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct ApproveJoinRequest<'info>{
+    #[account(
+        mut,
+        seeds = [b"ajo-group", ajo_group.name.as_bytes()],
+        bump = ajo_group.bumps
+    )]
+    pub ajo_group: Account<'info, AjoGroup>,
+
+    #[account()]
+    pub participant: UncheckedAccount<'info>,
+
+    pub caller: Signer<'info>,
+    
+    #[account(
+        mut,
+        seeds = [b"global-state"],
+        bump = global_state.bumps
+    )]
+    pub global_state: Account<'info, GlobalState>,
 }
 
 #[derive(Accounts)]

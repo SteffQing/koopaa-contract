@@ -29,10 +29,13 @@ pub enum KooPaaError {
     #[msg("You have already joined this group")]
     AlreadyJoined,
 
-    #[msg("Security Deposit must be greater than 0")]
-    InvalidSecurityDeposit,
+    #[msg("You have already requested to joined this group")]
+    AlreadyRequested,
 
-    #[msg("Only admin can update global state")]
+    #[msg("No Group admin")]
+    GroupHasNoAdmin,
+
+    #[msg("Only admin can update state")]
     OnlyAdminCanUpdate,
 
     #[msg("You have already voted to close this group")]

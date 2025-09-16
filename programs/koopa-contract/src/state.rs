@@ -11,7 +11,6 @@ pub struct AjoParticipant {
 pub struct AjoGroup {
     // Basic group information
     pub name: String,              // Unique name for the group
-    pub security_deposit: u64,     // Amount in USDC to join this group
     pub contribution_amount: u64,  // Amount in USDC to contribute each round
     pub contribution_interval: u8, // Time between rounds when a user should pay (in days)
     pub payout_interval: u8,       // Time between payouts (in days)
@@ -23,6 +22,7 @@ pub struct AjoGroup {
     pub payout_round: u16, // state for payouts made, useful in calc current round, index of recipient
 
     pub close_votes: Vec<Pubkey>, // Track who has voted to close
+    pub waiting_room: Vec<Pubkey>, // Track users who requested to join the group
     pub is_closed: bool,
 
     pub vault_bump: u8,
@@ -34,8 +34,7 @@ impl AjoGroup {
     pub fn calculate_size(name: &str, num_participants: u8) -> usize {
         // Space for fixed fields
         let fixed_size = 8 +  // account discriminator
-                         (4 + name.len()) +  // name (string)
-                         8 +  // security_deposit (u64)
+                        (4 + name.len()) +  // name (string)
                          8 +  // contribution_amount (u64)
                          1 +  // contribution_interval (u8)
                          1 +  // payout_interval (u8)
@@ -44,6 +43,7 @@ impl AjoGroup {
                          8 + 1 + // start_timestamp -> FIX if Optional has its bumps (i64)| Yes it does: 1
                          2 +  // payout_round (u16)
                          4 + (num_participants as usize * 32) + // close_votes vector + max pubkeys
+                         4 + (num_participants as usize * 32) + // waiting_room vector + max pubkeys
                          1 +  // is_closed (bool)
                          1 + // vault_bump (u8)
                          1; // bumps (u8)

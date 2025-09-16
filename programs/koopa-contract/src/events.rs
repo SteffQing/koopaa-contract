@@ -15,6 +15,19 @@ pub struct ParticipantJoinedEvent {
     pub group_name: String,
     pub participant: Pubkey,
     pub join_timestamp: i64,
+    pub admin_invited: bool
+}
+
+#[event]
+pub struct JoinRequestRejectedEvent {
+    pub group_name: String,
+    pub participant: Pubkey,
+}
+
+#[event]
+pub struct ParticipantInWaitingRoomEvent {
+    pub group_name: String,
+    pub participant: Pubkey,
 }
 
 #[event]
