@@ -3,7 +3,6 @@ use anchor_lang::prelude::*;
 #[event]
 pub struct AjoGroupCreatedEvent {
     pub group_name: String,
-    pub security_deposit: u64,
     pub contribution_amount: u64,
     pub num_participants: u8,
     pub contribution_interval: u8,

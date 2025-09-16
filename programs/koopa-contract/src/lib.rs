@@ -15,7 +15,7 @@ use utils::*;
 // This is your program's public key and it will update
 // automatically when you build the project.
 
-declare_id!("33NAzyKNuayyqKNW6QMXbNT69CikAhCUhPbgwZn1LR3o");
+declare_id!("2ritrNbhimgFDysvHUgh1Cc5Xr5Z9qWmiumSH76WVzXh");
 
 #[program]
 mod koopa {
@@ -371,7 +371,6 @@ mod koopa {
 
         let group_started = group.start_timestamp.is_some();
         let group_contribution_amount = group.contribution_amount;
-        let group_security_deposit = group.security_deposit;
 
         if total_votes * 2 > total_participants {
             let minimum_common_contribution_round = group
@@ -382,7 +381,7 @@ mod koopa {
                 .unwrap();
 
             for participant in group.participants.iter_mut() {
-                let contribution_refund = if group_started {
+                participant.refund_amount = if group_started {
                     let refundable_rounds =
                         participant.contribution_round - minimum_common_contribution_round;
                     group_contribution_amount * refundable_rounds as u64
@@ -390,7 +389,6 @@ mod koopa {
                     0
                 };
 
-                participant.refund_amount = group_security_deposit + contribution_refund;
             }
 
             if group_started && global_state.active_groups > 0 {
