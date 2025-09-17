@@ -596,7 +596,7 @@ pub struct ApproveJoinRequest<'info>{
     )]
     pub ajo_group: Account<'info, AjoGroup>,
 
-    #[account()]
+    /// CHECK: we only care about the pubkey
     pub participant: UncheckedAccount<'info>,
 
     pub caller: Signer<'info>,
