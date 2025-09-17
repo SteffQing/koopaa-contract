@@ -388,7 +388,6 @@ mod koopa {
                 } else {
                     0
                 };
-
             }
 
             if group_started && global_state.active_groups > 0 {
